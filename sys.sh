@@ -349,6 +349,53 @@ clone_repo() {
     fi
 }
 
+download_display_link() {
+    local dlfileid=$(echo $dlurl | perl -pe '($_)=/.+\?id=(\d+)/')
+
+    echo -en "\nPlease read the Software License Agreement\navailable at $dlurl\nand accept here: [Y]es or [N]o: "
+    read ACCEPT
+    case $ACCEPT in
+        y*|Y*)
+            echo -e "\nDownloading DisplayLink Ubuntu driver:\n"
+            wget -O DisplayLink_Ubuntu_${version}.zip "--post-data=fileId=$dlfileid&accept_submit=Accept" $dlurl
+            # make sure we got the file downloadet before continueing
+            if [ $? -ne 0 ]
+            then
+                echo -e "\nUnable to download Displaylink driver\n"
+                exit
+            fi
+            ;;
+        *)
+            echo "Can't download the driver without accepting the license agreement!"
+            exit 1
+            ;;
+    esac
+}
+
+install_display_link() {
+    log_info "Installing DisplayLink..."
+
+    log_info "Installing DisplayLink deps..."
+
+    check_install_apt_package unzip "unzip"
+    check_install_apt_package linux-headers-$(uname -r) "Linux Headers"
+    check_install_apt_package dkms "DKMS"
+    check_install_apt_package lsb-release "lsb-release"
+    check_install_apt_package linux-source "linux-source"
+
+
+    log_info "DisplayLink deps are installed."
+
+    local version=`wget -q -O - https://www.displaylink.com/downloads/ubuntu | grep "download-version" | head -n 1 | perl -pe '($_)=/([0-9]+([.][0-9]+)+)/'`
+    # define download url to be the correct version
+    local dlurl="https://www.displaylink.com/"`wget -q -O - https://www.displaylink.com/downloads/ubuntu | grep "download-link" | head -n 1 | perl -pe '($_)=/<a href="\/([^"]+)"[^>]+class="download-link"/'`
+    local driver_dir=$version
+
+    download_display_link
+
+    log_info "DisplayLink is installed."
+}
+
 # ==============================================================================
 
 install() {
@@ -379,6 +426,8 @@ install() {
     install_docker_compose
     install_cli_utils
     install_ag
+
+    install_display_link
 
     log_info "Great Success!"
 
