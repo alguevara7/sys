@@ -357,7 +357,7 @@ download_display_link() {
     case $ACCEPT in
         y*|Y*)
             echo -e "\nDownloading DisplayLink Ubuntu driver:\n"
-            wget -O DisplayLink_Ubuntu_${version}.zip "--post-data=fileId=$dlfileid&accept_submit=Accept" $dlurl
+            wget -O ./tmp/DisplayLink_Ubuntu_${version}.zip "--post-data=fileId=$dlfileid&accept_submit=Accept" $dlurl
             # make sure we got the file downloadet before continueing
             if [ $? -ne 0 ]
             then
@@ -389,9 +389,13 @@ install_display_link() {
     local version=`wget -q -O - https://www.displaylink.com/downloads/ubuntu | grep "download-version" | head -n 1 | perl -pe '($_)=/([0-9]+([.][0-9]+)+)/'`
     # define download url to be the correct version
     local dlurl="https://www.displaylink.com/"`wget -q -O - https://www.displaylink.com/downloads/ubuntu | grep "download-link" | head -n 1 | perl -pe '($_)=/<a href="\/([^"]+)"[^>]+class="download-link"/'`
-    local driver_dir=$version
+    local driver_dir=./tmp/$version
 
     download_display_link
+
+    unzip -d $driver_dir ./tmp/DisplayLink_Ubuntu_${version}.zip
+
+    sudo ./$driver_dir/displaylink-driver-4.4.24.run
 
     log_info "DisplayLink is installed."
 }
