@@ -86,13 +86,11 @@ check_reboot_required() {
 }
 
 apt_update_all() {
-    if os_ubuntu; then
-        log_info "Checking for APT packages updates..."
-        sudo apt update
-        sudo apt dist-upgrade -y
-        sudo apt autoremove -y
-        log_info "APT packages up to date."
-    fi
+    log_info "Checking for APT packages updates..."
+    sudo apt update
+    sudo apt dist-upgrade -y
+    sudo apt autoremove -y
+    log_info "APT packages up to date."
 }
 
 apt_install_package() {
@@ -132,11 +130,9 @@ check_install_download_deb() {
 }
 
 snap_update_all() {
-    if os_ubuntu; then
-        log_info "Checking for snap packages updates..."
-        sudo snap refresh
-        log_info "snap packages up to date."
-    fi
+    log_info "Checking for snap packages updates..."
+    sudo snap refresh
+    log_info "snap packages up to date."
 }
 
 snap_install_package() {
@@ -164,30 +160,22 @@ check_install_snap_package() {
 }
 
 install_coreutils() {
-    if os_macos; then
-        check_install_brew_package coreutils CoreUtils
-    fi
+    check_install_apt_package curl "cURL"
 }
 
 install_ssh() {
-    if os_ubuntu; then
-        check_install_apt_package openssh-client "SSH Client"
-        check_install_apt_package openssh-server "SSH Server"
-        check_install_apt_package autossh "auto SSH"
-    fi
+    check_install_apt_package openssh-client "SSH Client"
+    check_install_apt_package openssh-server "SSH Server"
+    check_install_apt_package autossh "auto SSH"
 }
 
 install_rsync() {
-    if os_ubuntu; then
-        check_install_apt_package rsync Rsync
-    fi
+    check_install_apt_package rsync Rsync
 }
 
 install_git() {
-    if os_ubuntu; then
-        check_install_apt_package git Git
-        check_install_apt_package gitk GitK
-    fi
+    check_install_apt_package git Git
+    check_install_apt_package gitk GitK
 }
 
 # ==============================================================================
@@ -259,15 +247,11 @@ configure_git() {
 }
 
 install_i3() {
-    if os_ubuntu; then
-        check_install_apt_package i3 i3
-    fi
+    check_install_apt_package i3 i3
 }
 
 install_ubuntu_restricted_extras() {
-    if os_ubuntu; then
-        check_install_apt_package ubuntu-restricted-extras "Ubuntu Restricted Extras"
-    fi
+    check_install_apt_package ubuntu-restricted-extras "Ubuntu Restricted Extras"
 }
 
 # ==============================================================================
@@ -275,9 +259,7 @@ install_ubuntu_restricted_extras() {
 # ==============================================================================
 
 install_chromium() {
-    if os_ubuntu; then
-        check_install_apt_package chromium-browser Chromium
-    fi
+    check_install_apt_package chromium-browser Chromium
 }
 
 # ==============================================================================
@@ -286,33 +268,32 @@ install_chromium() {
 
 install_docker() {
     log_info "Checking Docker..."
-    if os_ubuntu; then
-        if ! apt_package_installed docker-ce; then
-            log_info "Installing Docker..."
-            sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-            # sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-            # sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) edge"
-            # sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"
-            sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic edge"
-            sudo apt update
-            apt_install_package docker-ce
-            if [[ -z "$(grep docker /etc/group)" ]]; then
-                sudo groupadd docker
-            fi
-            sudo usermod -aG docker ${USER}
-            # Using overlay2 FS instead of default older AUFS
-            # Log files rotation
-            # Exposing Docker metrics to prometheus
-            cat <<EOF | sudo tee /etc/docker/daemon.json
+    if ! apt_package_installed docker-ce; then
+        log_info "Installing Docker..."
+        sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+        # sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+        # sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) edge"
+        # sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"
+        sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic edge"
+        sudo apt update
+        apt_install_package docker-ce
+        if [[ -z "$(grep docker /etc/group)" ]]; then
+            sudo groupadd docker
+        fi
+        sudo usermod -aG docker ${USER}
+        # Using overlay2 FS instead of default older AUFS
+        # Log files rotation
+        # Exposing Docker metrics to prometheus
+        cat <<EOF | sudo tee /etc/docker/daemon.json
 {
   "storage-driver": "overlay2",
   "experimental": true
 }
 EOF
 
-            sudo systemctl enable docker
-            log_info "
+        sudo systemctl enable docker
+        log_info "
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !!!                                                 !!!
     !!!        YOU NEED TO RESTART TO USE DOCKER        !!!
@@ -320,8 +301,7 @@ EOF
     !!!        RESTART AND RUN AGAIN                    !!!
     !!!                                                 !!!
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-            exit 0
-        fi
+        exit 0
     fi
     log_info "Docker is installed."
 }
@@ -351,10 +331,10 @@ install_vim() {
 }
 
 configure_xrandr() {
-	log_info "Configuring xrandr..."
-	add_zshrc_line "# xrandr"
-	add_zshrc_line "xrandr_hires() { xrandr --output Virtual1 --primary --mode 1920x1200 ; }"
-	log_info "Xrandr configured."
+    log_info "Configuring xrandr..."
+    add_zshrc_line "# xrandr"
+    add_zshrc_line "xrandr_hires() { xrandr --output Virtual1 --primary --mode 1920x1200 ; }"
+    log_info "Xrandr configured."
 }
 
 clone_repo() {
