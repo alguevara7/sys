@@ -416,6 +416,13 @@ install_nvidia_docker() {
     log_info "NVidia Docker Installed."
 }
 
+
+disabled_wakeup_from_kb_mouse() {
+   cp /proc/acpi/wakeup ~/tmp/
+   sed -i 's/enabled   pci:0000:00:14.0/disabled   pci:0000:00:14.0/g' ~/tmp/wakeup
+   sudo cp ~/tmp/wakeup /proc/acpi/
+}
+
 # ==============================================================================
 
 install() {
@@ -430,6 +437,9 @@ install() {
     install_ssh
     install_rsync
     install_git
+
+    # hardware setup
+    disabled_wakeup_from_kb_mouse
 
     # personal config
     install_zsh
