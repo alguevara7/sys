@@ -471,7 +471,7 @@ install() {
     install_cli_utils
     install_ag
 
-    #install_display_link
+    install_display_link
     install_nvidia_driver
     install_nvidia_docker
 
