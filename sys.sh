@@ -383,7 +383,6 @@ install_display_link() {
     check_install_apt_package lsb-release "lsb-release"
     check_install_apt_package linux-source "linux-source"
 
-
     log_info "DisplayLink deps are installed."
 
     local version=`wget -q -O - https://www.displaylink.com/downloads/ubuntu | grep "download-version" | head -n 1 | perl -pe '($_)=/([0-9]+([.][0-9]+)+)/'`
@@ -398,6 +397,23 @@ install_display_link() {
     sudo ./$driver_dir/displaylink-driver-4.4.24.run
 
     log_info "DisplayLink is installed."
+}
+
+install_nvidia_driver() {
+    check_install_apt_package nvidia-driver-390 "NVidia Driver 390"
+}
+
+install_nvidia_docker() {
+    log_info "Installing NVidia Docker..."
+    curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | \
+	    sudo apt-key add -
+    distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+    curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | \
+	    sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+    sudo apt-get -y update
+    check_install_apt_package nvidia-docker2 "NVidia Docker v2"
+    sudo pkill -SIGHUP dockerd
+    log_info "NVidia Docker Installed."
 }
 
 # ==============================================================================
@@ -431,7 +447,9 @@ install() {
     install_cli_utils
     install_ag
 
-    install_display_link
+    #install_display_link
+    install_nvidia_driver
+    install_nvidia_docker
 
     log_info "Great Success!"
 
