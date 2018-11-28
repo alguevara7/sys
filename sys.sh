@@ -423,6 +423,10 @@ disabled_wakeup_from_kb_mouse() {
    sudo cp ~/tmp/wakeup /proc/acpi/
 }
 
+suspend_on_power_button_press() {
+    sudo_add_line /etc/systemd/logind.conf "HandlePowerKey=suspend"
+}
+
 # ==============================================================================
 
 install() {
@@ -440,6 +444,7 @@ install() {
 
     # hardware setup
     disabled_wakeup_from_kb_mouse
+    suspend_on_power_button_press
 
     # personal config
     install_zsh
