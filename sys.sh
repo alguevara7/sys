@@ -373,6 +373,10 @@ download_display_link() {
 }
 
 install_display_link() {
+    if [ "$(lsmod | grep evdi | wc -l)" -eq "0" ]; then
+       log_info "DisplayLink already installed."
+       return
+    fi
     log_info "Installing DisplayLink..."
 
     log_info "Installing DisplayLink deps..."
@@ -400,7 +404,11 @@ install_display_link() {
 }
 
 install_nvidia_driver() {
-    check_install_apt_package nvidia-driver-390 "NVidia Driver 390"
+    sudo add-apt-repository -y ppa:graphics-drivers/ppa
+    sudo apt-get -y update
+    sudo apt-get install -y nvidia-graphics-drivers-410
+
+    #check_install_apt_package nvidia-driver-390 "NVidia Driver 390"
 }
 
 install_nvidia_docker() {
@@ -418,9 +426,10 @@ install_nvidia_docker() {
 
 
 disabled_wakeup_from_kb_mouse() {
-   cp /proc/acpi/wakeup ~/tmp/
-   sed -i 's/enabled   pci:0000:00:14.0/disabled   pci:0000:00:14.0/g' ~/tmp/wakeup
-   sudo cp ~/tmp/wakeup /proc/acpi/
+   # FIXME!
+   #cp /proc/acpi/wakeup ~/tmp/
+   #sed -i 's/enabled   pci:0000:00:14.0/disabled   pci:0000:00:14.0/g' ~/tmp/wakeup
+   #sudo cp ~/tmp/wakeup /proc/acpi/
 }
 
 suspend_on_power_button_press() {
