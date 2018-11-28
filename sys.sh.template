@@ -1,0 +1,729 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+test ! -z ${DEBUG+x} && set -x
+
+WORKDIR=$(realpath $(dirname $0))
+
+cd ${WORKDIR}
+
+# ==============================================================================
+
+detect_os() {
+    if [[ "$(uname)" == "Darwin" ]]; then
+        OS=MacOS
+        STAT_CMD=gstat
+        DATE_CMD=gdate
+        ECHO_CMD=gecho
+        BASE64_CMD=gbase64
+    else
+        STAT_CMD=stat
+        DATE_CMD=date
+        ECHO_CMD=echo
+        BASE64_CMD=base64
+        if [[ "$(lsb_release -i)" == "Distributor ID:	Ubuntu" ]]; then
+            OS=ubuntu
+        elif [[ -f /etc/arch-release ]]; then
+            OS=arch
+        else
+            echo "Unable to detect OS. Too bad!"
+            exit 1
+        fi
+    fi
+}
+
+os_macos() {
+    [[ ${OS} == "MacOS" ]] && return 0 || return 1
+}
+
+os_linux() {
+    [[ ${OS} != "MacOS" ]] && return 0 || return 1
+}
+
+os_ubuntu() {
+    [[ ${OS} == "ubuntu" ]] && return 0 || return 1
+}
+
+os_arch() {
+    [[ ${OS} == "arch" ]] && return 0 || return 1
+}
+
+log() {
+    ${ECHO_CMD} -e "$(${DATE_CMD} --utc +%FT%T.%3NZ) $1"
+}
+
+log_info() {
+    log " [INFO ] \e[92m$1\e[0m"
+}
+
+log_warn() {
+    log " [WARN ] \e[93m$1\e[0m"
+}
+
+log_error() {
+    log " [ERROR] \e[91m$1\e[0m"
+}
+
+# ==============================================================================
+# base system
+# ==============================================================================
+
+self_update() {
+    log_info "Checking for self updates..."
+    if [[ ! -d .git ]]; then
+        exit 1
+    fi
+    if [[ -n $(which git) ]]; then
+        if [[ -z "$(git diff)" ]]; then
+            git fetch origin
+            if [[ "$(git log HEAD..origin/master --oneline)" != "" ]]; then
+                log_info "Self updating..."
+                git merge origin/master
+                log_info "Self update done. Run $0 again."
+                exit 0
+            fi
+            log_info "Up to date."
+        else
+            log_warn "Local changes detected, skipping self-update."
+        fi
+    else
+        # skip if sys was just copied over to the new machine
+        log_warn "Git not installed, skipping self-update."
+    fi
+}
+
+check_root_password() {
+    if os_linux; then
+        log_info "Checking root password..."
+        if [[ "$(sudo passwd -S root | awk '{print $2}')" == "P" ]]; then
+            log_info "Root password is enabled, locking now..."
+            sudo passwd -l root
+        fi
+        log_info "Root password is locked."
+    fi
+}
+
+check_reboot_required() {
+    if os_ubuntu; then
+        if [[ -f /var/run/reboot-required ]]; then
+            log_info "
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!                                                 !!!
+!!!        /var/run/reboot-required says            !!!
+!!!        *** System restart required ***          !!!
+!!!                                                 !!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            read -n 1 -p "Press any key to continue or Ctrl+C to exit."
+        fi
+    fi
+}
+
+apt_update_all() {
+    if os_ubuntu; then
+        log_info "Checking for APT packages updates..."
+        sudo apt update
+        sudo apt dist-upgrade -y
+        sudo apt autoremove -y
+        log_info "APT packages up to date."
+    fi
+}
+
+apt_install_package() {
+    PACKAGE=$1
+    sudo apt install ${PACKAGE} -y
+}
+
+apt_package_installed() {
+    PACKAGE=$1
+    dpkg -s ${PACKAGE} &>/dev/null && return 0 || return 1
+}
+
+check_install_apt_package() {
+    PACKAGE=$1
+    LABEL=${2:-$1}
+    log_info "Checking ${LABEL}..."
+    if ! apt_package_installed ${PACKAGE}; then
+        log_info "Installing ${LABEL}..."
+        apt_install_package ${PACKAGE}
+    fi
+    log_info "${LABEL} is installed."
+}
+
+check_install_download_deb() {
+    PACKAGE=$1
+    LABEL=$2
+    URL=$3
+    LOCAL_FILE=$4
+    log_info "Checking ${LABEL}..."
+    if ! apt_package_installed ${PACKAGE}; then
+        log_info "Installing ${LABEL}..."
+        wget -c ${URL} -O ${LOCAL_FILE}
+        sudo apt install -y ${LOCAL_FILE}
+        rm -f ${LOCAL_FILE}
+    fi
+    log_info "${LABEL} is installed."
+}
+
+snap_update_all() {
+    if os_ubuntu; then
+        log_info "Checking for snap packages updates..."
+        sudo snap refresh
+        log_info "snap packages up to date."
+    fi
+}
+
+snap_install_package() {
+    PACKAGE=$1
+    OPTS=${2:-}
+    sudo snap install ${PACKAGE} ${OPTS}
+}
+
+snap_package_installed() {
+    PACKAGE=$1
+    INSTALLED=$(sudo snap list | grep "^${PACKAGE} " 2>/dev/null)
+    test -n "${INSTALLED}" && return 0 || return 1
+}
+
+check_install_snap_package() {
+    PACKAGE=$1
+    LABEL=${2:-$1}
+    OPTS=${3:-}
+    log_info "Checking ${LABEL}..."
+    if ! snap_package_installed ${PACKAGE}; then
+        log_info "Installing ${LABEL}..."
+        snap_install_package ${PACKAGE} ${OPTS}
+    fi
+    log_info "${LABEL} is installed."
+}
+
+check_install_go_package() {
+    PACKAGE=$1
+    BINARY_NAME=$2
+    LABEL=$3
+    log_info "Checking ${LABEL}..."
+    if [[ ! -f "${GOPATH}/bin/${BINARY_NAME}" ]]; then
+        log_info "Installing ${LABEL}..."
+        go get -u ${PACKAGE}
+    fi
+    log_info "${LABEL} is installed."
+}
+
+install_coreutils() {
+    if os_macos; then
+        check_install_brew_package coreutils CoreUtils
+    fi
+}
+
+install_ssh() {
+    if os_ubuntu; then
+        check_install_apt_package openssh-client "SSH Client"
+        check_install_apt_package openssh-server "SSH Server"
+        check_install_apt_package autossh "auto SSH"
+    fi
+}
+
+install_rsync() {
+    if os_ubuntu; then
+        check_install_apt_package rsync Rsync
+    fi
+}
+
+install_git() {
+    if os_ubuntu; then
+        check_install_apt_package git Git
+        check_install_apt_package gitk GitK
+    fi
+}
+
+# ==============================================================================
+# personal config
+# ==============================================================================
+
+check_permissions() {
+    MOD=$1
+    FILE=$2
+    if [[ "$(${STAT_CMD} -c %a ${FILE})" != "${MOD}" ]]; then
+        chmod "${MOD}" "${FILE}"
+    fi
+}
+
+install_file() {
+    SOURCE=$1
+    DESTINATION=$2
+    MOD=$3
+    if [[ ! -f ${DESTINATION} ]]; then
+        if [[ ${SOURCE} == *.gpg ]] && [[ ${DESTINATION} != *.gpg ]]; then
+            gpg_decrypt_file ${SOURCE} ${DESTINATION}
+        elif [[ ${SOURCE} != *.gpg ]] && [[ ${DESTINATION} == *.gpg ]]; then
+            gpg_encrypt_file ${SOURCE} ${DESTINATION}
+        else
+            cp -f ${SOURCE} ${DESTINATION}
+        fi
+    fi
+    check_permissions ${MOD} ${DESTINATION}
+}
+
+install_ebay_root_certificate_authority() {
+    # eBay Root CA is pre-installed on eBay macOS images
+    log_info "Checking eBay Root CA..."
+    if os_ubuntu; then
+        if ! apt_package_installed libnss3-tools; then
+            log_info "Installing libnss3-tools..."
+            apt_install_package libnss3-tools
+        fi
+        if [[ ! -d ${HOME}/.pki/nssdb ]]; then
+            mkdir -p ${HOME}/.pki/nssdb
+            certutil -d ${HOME}/.pki/nssdb -N --empty-password
+        fi
+        if ! certutil -d sql:${HOME}/.pki/nssdb -L -n eBayRoot &>/dev/null; then
+            log_info "Installing eBay Root CA..."
+            pass ssl/eBayRootCA.cer.base64 | base64 -d >${HOME}/eBayRootCA.cer
+            certutil -d sql:${HOME}/.pki/nssdb -A -t "C,," -n eBayRoot -i ${HOME}/eBayRootCA.cer
+            rm ${HOME}/eBayRootCA.cer
+        fi
+        if ! certutil -d sql:${HOME}/.pki/nssdb -L -n eBayNet &>/dev/null; then
+            log_info "Installing eBay Net CA..."
+            pass ssl/eBayNetCAv2A.cer.base64 | base64 -d >${HOME}/eBayNetCAv2A.cer
+            certutil -d sql:${HOME}/.pki/nssdb -A -t ",," -n eBayNet -i ${HOME}/eBayNetCAv2A.cer
+            rm ${HOME}/eBayNetCAv2A.cer
+        fi
+        # Note: to trust a self-signed server certificate, use `-t "P,,"`
+    fi
+    log_info "eBay Root CA is installed."
+}
+
+configure_ssh() {
+    log_info "Checking SSH config..."
+    if [[ ! -f ${HOME}/.ssh/config ]]; then
+        log_info "Installing SSH config..."
+        mkdir -p ${HOME}/.ssh
+        install_file .ssh/config ${HOME}/.ssh/config 600
+    fi
+    check_permissions 700 ${HOME}/.ssh
+    check_permissions 600 ${HOME}/.ssh/config
+    log_info "SSH is configured."
+}
+
+chech_ssh_id() {
+    SERVER=$1
+    ssh -o PasswordAuthentication=no ${SERVER} exit &>/dev/null || ssh-copy-id ${SERVER}
+}
+
+add_line() {
+    FILE=$1
+    LINE=$2
+    grep -q -F "${LINE}" "${FILE}" || echo "${LINE}" >>"${FILE}"
+}
+
+sudo_add_line() {
+    FILE=$1
+    LINE=$2
+    sudo grep -q -F "${LINE}" "${FILE}" || echo "${LINE}" | sudo tee -a "${FILE}"
+}
+
+add_zshrc_line() {
+    LINE=$1
+    add_line "${HOME}/.zshrc" "${LINE}"
+}
+
+install_zsh() {
+    log_info "Installing zsh..."
+    check_install_apt_package zsh Zsh
+    log_info "Zsh installed."
+}
+
+install_ohmyzsh() {
+    log_info "Installing oh-my-zsh..."
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+    log_info "Oh-my-zsh installed."
+}
+
+configure_zsh() {
+    log_info "Configuring zsh..."
+#    if os_ubuntu; then
+#        sed -i 's/^HISTCONTROL=ignoreboth$/HISTCONTROL=ignoreboth:erasedups/g' ${HOME}/.bashrc
+#        sed -i 's/^HISTSIZE=1000$/HISTSIZE=10000/g' ${HOME}/.bashrc
+#        sed -i 's/^HISTFILESIZE=2000$/HISTFILESIZE=20000/g' ${HOME}/.bashrc
+#    fi
+#    add_inputrc_line "\"\e[A\": history-search-backward"
+#    add_inputrc_line "\"\e[B\": history-search-forward"
+#    add_inputrc_line "set show-all-if-ambiguous on"
+#    add_inputrc_line "set completion-ignore-case on"
+    log_info "Zsh configured."
+}
+
+install_local_bin() {
+    log_info "Configuring local bin directory..."
+    mkdir -p ${HOME}/.local/bin
+    check_permissions 700 ${HOME}/.local/bin
+    for FILE in $(ls .local/bin); do
+        if [[ ! -f ${HOME}/.local/bin/${FILE} ]]; then
+            ln -s ${PWD}/.local/bin/${FILE} ${HOME}/.local/bin/${FILE}
+        fi
+    done
+    add_zshrc_line "# Add local bin to PATH"
+    add_zshrc_line 'export PATH=${PATH}:${HOME}/.local/bin'
+    log_info "Local bin directory configured."
+}
+
+configure_editor() {
+    log_info "Configuring default editor..."
+    add_zshrc_line "# set EDITOR"
+    add_zshrc_line "export EDITOR=vim"
+    log_info "Default editor configured."
+}
+
+configure_git() {
+    log_info "Configuring git..."
+    git config --global user.name "Alexei Guevara"
+    git config --global user.email alguevara@ebay.com
+    git config --global branch.autosetuprebase always
+    git config --global pull.rebase true
+    git config --global core.editor vim
+    git config --global color.ui true
+    git config --global push.default simple
+    git config --global hub.protocol https
+    git config --global url."ssh://git@github.corp.ebay.com/".insteadOf https://github.corp.ebay.com/
+    git config --global core.excludesfile ${HOME}/.gitignore_global
+    git config --global remote.origin.prune true
+    if [[ ! -f ${HOME}/.gitignore_global ]]; then
+        cat <<EOF >${HOME}/.gitignore_global
+.idea/
+*.iml
+.DS_Store
+EOF
+    fi
+    log_info "git configured."
+}
+
+install_i3() {
+    if os_ubuntu; then
+        check_install_apt_package i3 i3
+    fi
+}
+
+configure_i3() {
+    # TODO
+    true
+}
+
+
+install_ubuntu_restricted_extras() {
+    if os_ubuntu; then
+        check_install_apt_package ubuntu-restricted-extras "Ubuntu Restricted Extras"
+    fi
+}
+
+# ==============================================================================
+# system/desktop tools
+# ==============================================================================
+
+install_chromium() {
+    if os_ubuntu; then
+        check_install_apt_package chromium-browser Chromium
+    fi
+}
+
+install_slack() {
+    if os_ubuntu; then
+        check_install_snap_package slack Slack "--classic"
+    fi
+}
+
+# ==============================================================================
+# dev packages
+# ==============================================================================
+
+configure_dns() {
+    if os_linux; then
+        log_info "Checking DNS config..."
+        if [[ ! -L /etc/resolv.conf ]] || [[ "$(readlink /etc/resolv.conf)" != "/run/systemd/resolve/resolv.conf" ]]; then
+            log_info "Configuring DNS..."
+            sudo rm -f /etc/resolv.conf
+            sudo ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
+        fi
+        log_info "DNS is configured."
+    fi
+}
+
+install_docker() {
+    log_info "Checking Docker..."
+    if os_ubuntu; then
+        if ! apt_package_installed docker-ce; then
+            log_info "Installing Docker..."
+            sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+            # sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+            # sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) edge"
+            # sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"
+            sudo add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic edge"
+            sudo apt update
+            apt_install_package docker-ce
+            if [[ -z "$(grep docker /etc/group)" ]]; then
+                sudo groupadd docker
+            fi
+            sudo usermod -aG docker ${USER}
+            # Using overlay2 FS instead of default older AUFS
+            # Log files rotation
+            # Exposing Docker metrics to prometheus
+            cat <<EOF | sudo tee /etc/docker/daemon.json
+{
+  "storage-driver": "overlay2",
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "metrics-addr": "172.17.0.1:1337",
+  "experimental": true
+}
+EOF
+
+            sudo systemctl enable docker
+            log_info "
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!!                                                 !!!
+    !!!        YOU NEED TO RESTART TO USE DOCKER        !!!
+    !!!                                                 !!!
+    !!!        RESTART AND RUN AGAIN                    !!!
+    !!!                                                 !!!
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            exit 0
+        fi
+    fi
+    log_info "Docker is installed."
+}
+
+install_docker_compose() {
+    log_info "Checking Docker Compose..."
+    if [[ -z "$(which docker-compose)" ]]; then
+        log_info "Installing Docker Compose..."
+	sudo curl -L "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+	sudo chmod +x /usr/local/bin/docker-compose
+    fi
+    log_info "Docker Compose is installed."
+}
+
+install_jdk8() {
+    if os_ubuntu; then
+        check_install_apt_package openjdk-8-jdk "JDK 8"
+        check_install_apt_package openjdk-8-source "JDK 8 source"
+        check_install_apt_package openjfx "OpenJFX"
+        check_install_apt_package openjfx-source "OpenJFX source"
+        if [[ ! -d /usr/lib/jvm/default ]]; then
+            sudo ln -s /usr/lib/jvm/java-8-openjdk-amd64 /usr/lib/jvm/default
+        fi
+        add_zshrc_line "export JAVA_HOME=/usr/lib/jvm/default"
+    fi
+}
+
+install_intellij_idea() {
+    if os_ubuntu; then
+        check_install_snap_package intellij-idea-community "IntelliJ IDEA Community" "--classic"
+    fi
+}
+
+configure_intellij_idea() {
+    true
+}
+
+configure_inotify_for_intellij_idea() {
+    if os_ubuntu; then
+        log_info "Checking inotify settings for IntelliJ IDEA..."
+        if [[ -z "$(sudo grep -F fs.inotify.max_user_watches=524288 /etc/sysctl.conf)" ]]; then
+            log_info "Configuring inotify settings for IntelliJ IDEA..."
+            sudo sysctl -w fs.inotify.max_user_watches=524288
+            echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
+        fi
+        log_info "Inotify settings for IntelliJ IDEA installed."
+    fi
+}
+
+install_ivy2_credentials() {
+    log_info "Checking Ivy2 credentials..."
+    if [[ ! -f ${HOME}/.ivy2/.credentials ]]; then
+        log_info "Installing Ivy2 credentials..."
+        mkdir -p ${HOME}/.ivy2
+        cat <<EOF >${HOME}/.ivy2/.credentials
+realm=FiSci Nexus
+host=nexus.fs-ci.dus1.cloud
+user=NeverDeployFromDev
+password=NeverDeployFromDev
+EOF
+    fi
+    log_info "Ivy2 credentials is installed."
+}
+
+install_gradle_credentials() {
+    log_info "Checking Gradle credentials..."
+    if [[ ! -f ${HOME}/.gradle/gradle.properties ]]; then
+        log_info "Installing Gradle credentials..."
+        mkdir -p ${HOME}/.gradle
+        cat <<EOF >${HOME}/.gradle/gradle.properties
+nexusUsername=NeverDeployFromDev
+nexusPassword=NeverDeployFromDev
+EOF
+    fi
+    log_info "Gradle credentials is installed."
+}
+
+install_golang() {
+    if os_ubuntu; then
+        check_install_apt_package golang Go
+    fi
+}
+
+configure_golang() {
+    log_info "Checking Go config..."
+    mkdir -p ${HOME}/go/{bin,src}
+    add_zshrc_line "# Go"
+    add_zshrc_line 'export GOPATH=${HOME}/go'
+    add_zshrc_line 'export PATH=${PATH}:${GOPATH}/bin'
+    export GOPATH=${GOPATH:-${HOME}/go}
+    log_info "Go is configured."
+}
+
+install_cli_utils() {
+    if os_ubuntu; then
+        check_install_apt_package tmux tmux
+        check_install_apt_package jq jq
+        check_install_apt_package httpie HTTPie
+        check_install_apt_package python-openstackclient "Openstack Client"
+    fi
+    # shfmt usage:
+    # print diff in term: shfmt -i 4 -bn -ci -s -l -d .
+    # generate file and GUI diff: shfmt -i 4 -bn -ci -s $F > $F.fmt && meld $F $F.fmt &
+    check_install_go_package mvdan.cc/sh/cmd/shfmt shfmt shfmt
+}
+
+install_ag() {
+    if os_ubuntu; then
+        check_install_apt_package silversearcher-ag "Silver Searcher"
+    fi
+}
+
+install_vim() {
+    if os_ubuntu; then
+        check_install_apt_package vim "Vim"
+    fi
+}
+
+configure_vim() {
+    if os_ubuntu; then
+        log_warn "TODO: configure_vim"
+    fi
+}
+
+
+configure_elasticsearch_memory() {
+    if os_ubuntu; then
+        log_info "Checking memory settings for Elasticsearch..."
+        if [[ -z "$(sudo grep -F vm.max_map_count=262144 /etc/sysctl.conf)" ]]; then
+            log_info "Configuring memory settings for Elasticsearch..."
+            sudo sysctl -w vm.max_map_count=262144
+            echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+        fi
+        log_info "Memory settings for Elasticsearch installed."
+    fi
+}
+
+configure_xrandr() {
+	log_info "Configuring xrandr..."
+	add_zshrc_line "# xrandr"
+	add_zshrc_line "xrandr_hires() { xrandr --output Virtual1 --primary --mode 1920x1200 ; }"
+	log_info "Xrandr configured."
+}
+
+clone_repo() {
+    URL=$1
+    DESTINATION=$2
+    PARENT_DIR=$(dirname ${DESTINATION})
+    if [[ ! -d ${PARENT_DIR} ]]; then
+        mkdir -p ${PARENT_DIR}
+    fi
+    if [[ ! -d ${DESTINATION} ]]; then
+        git clone $URL $DESTINATION
+    fi
+}
+
+# ==============================================================================
+
+install() {
+
+    # base system
+    self_update
+    apt_update_all
+    snap_update_all
+    check_reboot_required
+    check_root_password
+    install_coreutils
+    install_ssh
+    install_rsync
+    install_git
+    configure_dns
+
+    # personal config
+    install_zsh
+    install_ohmyzsh
+    configure_zsh
+    configure_editor
+
+    # ask JS for the 2 eBay cert files
+    #install_ebay_root_certificate_authority
+    configure_ssh
+    configure_git
+    install_i3
+    configure_i3
+    install_vim
+    configure_vim
+    configure_xrandr
+    install_ubuntu_restricted_extras
+
+    # system/desktop tools
+    install_chromium
+    install_slack
+    configure_elasticsearch_memory
+    # dev packages
+    install_docker
+    install_docker_compose
+    install_jdk8
+    install_intellij_idea
+    configure_inotify_for_intellij_idea
+    install_golang
+    configure_golang
+    install_cli_utils
+    install_ag
+
+    log_info "Great Success!"
+
+}
+
+main() {
+
+    # Call detect_os immediately
+    detect_os
+
+    OPERATION=$1
+
+    case ${OPERATION} in
+        install)
+            install
+            ;;
+        *)
+            echo "
+Usage:
+    ./sys.sh install         check/install everything
+    ./sys.sh update-all      git pull all projects
+"
+            exit 1
+            ;;
+    esac
+
+}
+
+if [ "${EUID}" == "0" ]; then
+    echo "Naughty naughty!"
+    exit 1
+fi
+
+main ${1:-}
