@@ -161,6 +161,7 @@ check_install_snap_package() {
 
 install_coreutils() {
     check_install_apt_package curl "cURL"
+    check_install_apt_package gtk-redshift "GTK RedShift"
 }
 
 install_ssh() {
