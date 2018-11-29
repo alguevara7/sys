@@ -396,7 +396,8 @@ install_display_link() {
 install_nvidia_driver() {
     sudo add-apt-repository -y "ppa:graphics-drivers/ppa"
     sudo apt-get -y update
-    sudo apt-get install -y nvidia-driver-390
+    #sudo apt-get install -y nvidia-driver-390
+    sudo apt-get install -y nvidia-headless-390 nvidia-utils-390
     sudo apt-get install -y nvidia-settings
     sudo apt-get install -y --reinstall xserver-xorg-video-intel 
 }
