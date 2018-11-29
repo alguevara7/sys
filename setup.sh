@@ -363,10 +363,10 @@ download_display_link() {
 }
 
 install_display_link() {
-    if [ "$(lsmod | grep evdi | wc -l)" -eq "0" ]; then
-       log_info "DisplayLink already installed."
-       return
-    fi
+    #if [ "$(lsmod | grep evdi | wc -l)" -eq "0" ]; then
+    #   log_info "DisplayLink already installed."
+    #   return
+    #fi
     log_info "Installing DisplayLink..."
 
     log_info "Installing DisplayLink deps..."
@@ -394,12 +394,23 @@ install_display_link() {
 }
 
 install_nvidia_driver() {
+    log_info "Installing NVidia Driver..."
+
     sudo add-apt-repository -y "ppa:graphics-drivers/ppa"
     sudo apt-get -y update
-    #sudo apt-get install -y nvidia-driver-390
-    sudo apt-get install -y nvidia-headless-390 nvidia-utils-390
+    sudo apt-get install -y nvidia-driver-390
     sudo apt-get install -y nvidia-settings
+
+    log_info "NVidia Driver installed."
+}
+
+install_latest_intel_driver() {
+    log_info "Installing Latest Intel Video Driver..."
+
+    sudo add-apt-repository -y "ppa:oibaf/graphics-drivers"
     sudo apt-get install -y --reinstall xserver-xorg-video-intel 
+
+    log_info "Latest Intel Video Driver installed."
 }
 
 install_nvidia_docker() {
@@ -467,6 +478,7 @@ install() {
     install_nvidia_docker
 
     # le usb display
+    install_latest_intel_driver
     install_display_link
 
     log_info "Great Success!"

@@ -282,16 +282,6 @@ install_docker() {
             sudo groupadd docker
         fi
         sudo usermod -aG docker ${USER}
-        # Using overlay2 FS instead of default older AUFS
-        # Log files rotation
-        # Exposing Docker metrics to prometheus
-        cat <<EOF | sudo tee /etc/docker/daemon.json
-{
-  "storage-driver": "overlay2",
-  "experimental": true
-}
-EOF
-
         sudo systemctl enable docker
         log_info "
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -373,6 +363,10 @@ download_display_link() {
 }
 
 install_display_link() {
+    if [ "$(lsmod | grep evdi | wc -l)" -eq "0" ]; then
+       log_info "DisplayLink already installed."
+       return
+    fi
     log_info "Installing DisplayLink..."
 
     log_info "Installing DisplayLink deps..."
@@ -404,6 +398,7 @@ install_nvidia_driver() {
     sudo apt-get -y update
     sudo apt-get install -y nvidia-driver-390
     sudo apt-get install -y nvidia-settings
+    sudo apt-get install -y --reinstall xserver-xorg-video-intel 
 }
 
 install_nvidia_docker() {
@@ -421,7 +416,10 @@ install_nvidia_docker() {
 
 
 disabled_wakeup_from_kb_mouse() {
-    log_info "Mehh!"
+    # put it in rc.local
+    sudo touch /etc/rc.local
+    sudo_add_line /etc/rc.local "echo XHC > /proc/acpi/wakeup"
+    sudo_add_line /etc/rc.local "echo GLAN > /proc/acpi/wakeup"
 }
 
 suspend_on_power_button_press() {
@@ -432,6 +430,8 @@ suspend_on_power_button_press() {
 
 install() {
 
+    # base system
+    install_nvidia_driver
     install_nvidia_docker
 
     log_info "Great Success!"
