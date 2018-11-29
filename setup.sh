@@ -413,6 +413,10 @@ install_latest_intel_driver() {
     log_info "Latest Intel Video Driver installed."
 }
 
+configure_intel_driver() {
+    sudo cp files/20-intel.conf /usr/share/X11/xorg.conf.d/
+}
+
 install_nvidia_docker() {
     log_info "Installing NVidia Docker..."
     curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | \
@@ -479,6 +483,8 @@ install() {
 
     # le usb display
     install_latest_intel_driver
+    configure_intel_driver
+    
     install_display_link
 
     log_info "Great Success!"
