@@ -283,15 +283,6 @@ install_docker() {
         fi
         sudo usermod -aG docker ${USER}
         sudo systemctl enable docker
-        log_info "
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !!!                                                 !!!
-    !!!        YOU NEED TO RESTART TO USE DOCKER        !!!
-    !!!                                                 !!!
-    !!!        RESTART AND RUN AGAIN                    !!!
-    !!!                                                 !!!
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-        exit 0
     fi
     log_info "Docker is installed."
 }
@@ -432,10 +423,7 @@ install_nvidia_docker() {
 
 
 disabled_wakeup_from_kb_mouse() {
-    # put it in rc.local
-    sudo touch /etc/rc.local
-    sudo_add_line /etc/rc.local "echo XHC > /proc/acpi/wakeup"
-    sudo_add_line /etc/rc.local "echo GLAN > /proc/acpi/wakeup"
+    sudo cp files/rc.local /etc/
 }
 
 suspend_on_power_button_press() {
@@ -488,6 +476,7 @@ install() {
     install_display_link
 
     log_info "Great Success!"
+    log_info "Re-start to make sure it's all good :)"
 
 }
 
