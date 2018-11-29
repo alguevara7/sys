@@ -282,6 +282,16 @@ install_docker() {
             sudo groupadd docker
         fi
         sudo usermod -aG docker ${USER}
+        # Using overlay2 FS instead of default older AUFS
+        # Log files rotation
+        # Exposing Docker metrics to prometheus
+        cat <<EOF | sudo tee /etc/docker/daemon.json
+{
+  "storage-driver": "overlay2",
+  "experimental": true
+}
+EOF
+
         sudo systemctl enable docker
         log_info "
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -363,10 +373,6 @@ download_display_link() {
 }
 
 install_display_link() {
-    if [ "$(lsmod | grep evdi | wc -l)" -eq "0" ]; then
-       log_info "DisplayLink already installed."
-       return
-    fi
     log_info "Installing DisplayLink..."
 
     log_info "Installing DisplayLink deps..."
@@ -398,7 +404,6 @@ install_nvidia_driver() {
     sudo apt-get -y update
     sudo apt-get install -y nvidia-driver-390
     sudo apt-get install -y nvidia-settings
-    sudo apt-get install -y --reinstall xserver-xorg-video-intel 
 }
 
 install_nvidia_docker() {
@@ -416,10 +421,7 @@ install_nvidia_docker() {
 
 
 disabled_wakeup_from_kb_mouse() {
-    # put it in rc.local
-    sudo touch /etc/rc.local
-    sudo_add_line /etc/rc.local "echo XHC > /proc/acpi/wakeup"
-    sudo_add_line /etc/rc.local "echo GLAN > /proc/acpi/wakeup"
+    log_info "Mehh!"
 }
 
 suspend_on_power_button_press() {
@@ -430,43 +432,7 @@ suspend_on_power_button_press() {
 
 install() {
 
-    # base system
-    self_update
-    apt_update_all
-    snap_update_all
-    check_reboot_required
-    check_root_password
-    install_coreutils
-    install_ssh
-    install_rsync
-    install_git
-
-    # hardware setup
-    disabled_wakeup_from_kb_mouse
-    suspend_on_power_button_press
-
-    # personal config
-    install_zsh
-
-    install_i3
-    install_vim
-    #configure_xrandr
-    install_ubuntu_restricted_extras
-
-    # system/desktop tools
-    install_chromium
-    # dev packages
-    install_docker
-    install_docker_compose
-    install_cli_utils
-    install_ag
-
-    # le ML setup
-    install_nvidia_driver
     install_nvidia_docker
-
-    # le usb display
-    install_display_link
 
     log_info "Great Success!"
 
