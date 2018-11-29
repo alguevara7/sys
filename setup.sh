@@ -424,6 +424,7 @@ install_nvidia_docker() {
 
 disabled_wakeup_from_kb_mouse() {
     sudo cp files/rc.local /etc/
+    sudo chmod +x /etc/rc.local
 }
 
 suspend_on_power_button_press() {
