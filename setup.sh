@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 
+#TODO
+#- gtk-redshift
+#- oh-my-zsh
+#- i3-gaps
+#- compton
+#- variety
+#- volti
+#- clip by RB
+
 set -euo pipefail
 test ! -z ${DEBUG+x} && set -x
 
