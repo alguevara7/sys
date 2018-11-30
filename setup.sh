@@ -224,15 +224,17 @@ sudo_add_line() {
     sudo grep -q -F "${LINE}" "${FILE}" || echo "${LINE}" | sudo tee -a "${FILE}"
 }
 
-add_zshrc_line() {
-    LINE=$1
-    add_line "${HOME}/.zshrc" "${LINE}"
-}
-
 install_zsh() {
     log_info "Installing zsh..."
     check_install_apt_package zsh Zsh
     log_info "Zsh installed."
+}
+
+configure_zsh() {
+        # test!
+    log_info "Configuring zsh..."
+    sudo sed -i 's/\/home\/alguevara:\/bin\/bash/\/home\/alguevara:\/usr\/bin\/zsh/g' /etc/passwd
+    log_info "Zsh configured."
 }
 
 configure_git() {
@@ -308,14 +310,16 @@ install_ag() {
     check_install_apt_package silversearcher-ag "Silver Searcher"
 }
 
+install_conky() {
+    check_install_apt_package conky "Conky"
+}
+
 install_vim() {
     check_install_apt_package vim "Vim"
 }
 
 configure_xrandr() {
     log_info "Configuring xrandr..."
-    add_zshrc_line "# xrandr"
-    add_zshrc_line "xrandr_hires() { xrandr --output Virtual1 --primary --mode 1920x1200 ; }"
     log_info "Xrandr configured."
 }
 
@@ -329,60 +333,6 @@ clone_repo() {
     if [[ ! -d ${DESTINATION} ]]; then
         git clone $URL $DESTINATION
     fi
-}
-
-download_display_link() {
-    local dlfileid=$(echo $dlurl | perl -pe '($_)=/.+\?id=(\d+)/')
-
-    echo -en "\nPlease read the Software License Agreement\navailable at $dlurl\nand accept here: [Y]es or [N]o: "
-    read ACCEPT
-    case $ACCEPT in
-        y*|Y*)
-            echo -e "\nDownloading DisplayLink Ubuntu driver:\n"
-            wget -O ./tmp/DisplayLink_Ubuntu_${version}.zip "--post-data=fileId=$dlfileid&accept_submit=Accept" $dlurl
-            # make sure we got the file downloadet before continueing
-            if [ $? -ne 0 ]
-            then
-                echo -e "\nUnable to download Displaylink driver\n"
-                exit
-            fi
-            ;;
-        *)
-            echo "Can't download the driver without accepting the license agreement!"
-            exit 1
-            ;;
-    esac
-}
-
-install_display_link() {
-    #if [ "$(lsmod | grep evdi | wc -l)" -eq "0" ]; then
-    #   log_info "DisplayLink already installed."
-    #   return
-    #fi
-    log_info "Installing DisplayLink..."
-
-    log_info "Installing DisplayLink deps..."
-
-    check_install_apt_package unzip "unzip"
-    check_install_apt_package linux-headers-$(uname -r) "Linux Headers"
-    check_install_apt_package dkms "DKMS"
-    check_install_apt_package lsb-release "lsb-release"
-    check_install_apt_package linux-source "linux-source"
-
-    log_info "DisplayLink deps are installed."
-
-    local version=`wget -q -O - https://www.displaylink.com/downloads/ubuntu | grep "download-version" | head -n 1 | perl -pe '($_)=/([0-9]+([.][0-9]+)+)/'`
-    # define download url to be the correct version
-    local dlurl="https://www.displaylink.com/"`wget -q -O - https://www.displaylink.com/downloads/ubuntu | grep "download-link" | head -n 1 | perl -pe '($_)=/<a href="\/([^"]+)"[^>]+class="download-link"/'`
-    local driver_dir=./tmp/$version
-
-    download_display_link
-
-    unzip -d $driver_dir ./tmp/DisplayLink_Ubuntu_${version}.zip
-
-    sudo ./$driver_dir/displaylink-driver-4.4.24.run
-
-    log_info "DisplayLink is installed."
 }
 
 install_nvidia_driver() {
@@ -405,11 +355,12 @@ install_latest_intel_driver() {
     log_info "Latest Intel Video Driver installed."
 }
 
-configure_intel_driver() {
-    sudo cp files/20-intel.conf /usr/share/X11/xorg.conf.d/
-}
-
 install_nvidia_docker() {
+    if apt_package_installed nvidia-docker; then
+       log_info "NVidia Docker is installed already."
+       return
+    fi
+
     log_info "Installing NVidia Docker..."
     curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | \
 	    sudo apt-key add -
@@ -453,7 +404,7 @@ install() {
 
     # personal config
     install_zsh
-
+    configure_zsh
     install_i3
     install_vim
     #configure_xrandr
@@ -461,6 +412,8 @@ install() {
 
     # system/desktop tools
     install_chromium
+    install_conky
+
     # dev packages
     install_docker
     install_docker_compose
@@ -473,10 +426,7 @@ install() {
 
     # le usb display
     install_latest_intel_driver
-    configure_intel_driver
     
-    install_display_link
-
     log_info "Great Success!"
     log_info "Re-start to make sure it's all good :)"
 
