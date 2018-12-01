@@ -8,6 +8,7 @@
 #- variety
 #- volti
 #- clip by RB
+#- python3-pip
 
 set -euo pipefail
 test ! -z ${DEBUG+x} && set -x
@@ -46,7 +47,7 @@ log_error() {
 self_update() {
     log_info "Checking for self updates..."
     if [[ ! -d .git ]]; then
-	log_error "YO! where is your git repo ?"
+        log_error "YO! where is your git repo ?"
         exit 1
     fi
     if [[ -n $(which git) ]]; then
@@ -303,8 +304,8 @@ install_docker_compose() {
     log_info "Checking Docker Compose..."
     if [[ -z "$(which docker-compose)" ]]; then
         log_info "Installing Docker Compose..."
-	sudo curl -L "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-	sudo chmod +x /usr/local/bin/docker-compose
+    sudo curl -L "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
     fi
     log_info "Docker Compose is installed."
 }
@@ -359,8 +360,7 @@ install_latest_intel_driver() {
     log_info "Installing Latest Intel Video Driver..."
 
     sudo add-apt-repository -y "ppa:oibaf/graphics-drivers"
-    sudo apt-get install -y --reinstall xserver-xorg-video-intel 
-
+    sudo apt-get install -y --reinstall xserver-xorg-video-intel
     log_info "Latest Intel Video Driver installed."
 }
 
@@ -372,10 +372,10 @@ install_nvidia_docker() {
 
     log_info "Installing NVidia Docker..."
     curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | \
-	    sudo apt-key add -
+        sudo apt-key add -
     distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
     curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | \
-	    sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+        sudo tee /etc/apt/sources.list.d/nvidia-docker.list
     sudo apt-get -y update
     check_install_apt_package nvidia-docker2 "NVidia Docker v2"
     sudo pkill -SIGHUP dockerd
@@ -435,7 +435,7 @@ install() {
 
     # le usb display
     install_latest_intel_driver
-    
+
     log_info "Great Success!"
     log_info "Re-start to make sure it's all good :)"
 
